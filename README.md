@@ -11,14 +11,15 @@ input plane from SGF file.
 2. Copy LZ network weight file to this directory.
 3. Edit bun.py to change network weight file name.
 4. start python or ipython
-5. `
-    from bun import *
-    move = 20
-    x = get_input(move, fname='some_sgf_file.sgf')
-    show_array(x[1], scale=3) # show current position.
-    z = t.outputs['y_conv'][0].eval(feed_dict={t.x: x[0], t.training:False}, session=s) # calculate policy output
-    show_array(z[0:361].reshape(19,19), scale=3, figid=1)
-`
+5. 
+```
+from bun import *
+move = 20
+x = get_input(move, fname='some_sgf_file.sgf')
+show_array(x[1], scale=3) # show current position.
+z = t.outputs['y_conv'][0].eval(feed_dict={t.x: x[0], t.training:False}, session=s) # calculate policy output
+show_array(z[0:361].reshape(19,19), scale=3, figid=1)
+```
 
 
 Original README is following:
