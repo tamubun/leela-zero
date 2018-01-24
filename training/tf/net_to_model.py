@@ -29,7 +29,7 @@ x = [
     tf.placeholder(tf.float32, [None, 1])
     ]
 
-tfprocess = TFProcess(x)
+tfprocess = TFProcess(x, channels, blocks)
 tfprocess.replace_weights(weights)
 path = os.path.join(os.getcwd(), "leelaz-model")
 save_path = tfprocess.saver.save(tfprocess.session, path, global_step=0)

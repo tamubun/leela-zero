@@ -151,7 +151,7 @@ class ChunkParser:
                     for item_idx in range(item_count):
                         pick_offset = item_idx * DATA_ITEM_LINES
                         item = file_content[pick_offset:pick_offset + DATA_ITEM_LINES]
-                        str_items = [str(line, 'ascii') for line in item]
+                        str_items = [str(line) for line in item]
                         # Pick a random symmetry to apply
                         symmetry = random.randrange(8)
                         success, data = self.convert_train_data(str_items, symmetry)

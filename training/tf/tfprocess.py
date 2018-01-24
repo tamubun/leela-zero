@@ -16,6 +16,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with Leela Zero.  If not, see <http://www.gnu.org/licenses/>.
 
+# tamubun: modified to inserts probes of outputs and for tensorflow no gpu.
+
 import os
 import numpy as np
 import time
@@ -39,17 +41,20 @@ def bn_bias_variable(shape):
     return tf.Variable(initial, trainable=False)
 
 def conv2d(x, W):
-    return tf.nn.conv2d(x, W, data_format='NCHW',
+    return tf.nn.conv2d(x, W, data_format='NHWC',
                         strides=[1, 1, 1, 1], padding='SAME')
 
 class TFProcess:
-    def __init__(self, next_batch):
+    def __init__(self, next_batch, channels=64, blocks=5):
+        self.channels = channels
+        self.blocks = blocks
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.75)
         config = tf.ConfigProto(gpu_options=gpu_options)
         self.session = tf.Session(config=config)
 
         # For exporting
         self.weights = []
+        self.outputs = {}
 
         # TF variables
         self.next_batch = next_batch
@@ -60,6 +65,7 @@ class TFProcess:
         self.training = tf.placeholder(tf.bool)
         self.batch_norm_count = 0
         self.y_conv, self.z_conv = self.construct_net(self.x)
+        self.outputs['y_conv'], self.outputs['z_conv'] = self.y_conv, self.z_conv
 
         # Calculate loss on policy head
         cross_entropy = \
@@ -263,13 +269,13 @@ class TFProcess:
             h_bn = \
                 tf.layers.batch_normalization(
                     conv2d(inputs, W_conv),
-                    epsilon=1e-5, axis=1, fused=True,
+                    epsilon=1e-5, axis=3, fused=True,
                     center=False, scale=False,
                     training=self.training)
         h_conv = tf.nn.relu(h_bn)
         return h_conv
 
-    def residual_block(self, inputs, channels):
+    def residual_block(self, inputs, channels, outputs):
         # First convnet
         orig = tf.identity(inputs)
         W_conv_1 = weight_variable([3, 3, channels, channels])
@@ -293,7 +299,7 @@ class TFProcess:
             h_bn1 = \
                 tf.layers.batch_normalization(
                     conv2d(inputs, W_conv_1),
-                    epsilon=1e-5, axis=1, fused=True,
+                    epsilon=1e-5, axis=3, fused=True,
                     center=False, scale=False,
                     training=self.training)
         h_out_1 = tf.nn.relu(h_bn1)
@@ -301,50 +307,63 @@ class TFProcess:
             h_bn2 = \
                 tf.layers.batch_normalization(
                     conv2d(h_out_1, W_conv_2),
-                    epsilon=1e-5, axis=1, fused=True,
+                    epsilon=1e-5, axis=3, fused=True,
                     center=False, scale=False,
                     training=self.training)
         h_out_2 = tf.nn.relu(tf.add(h_bn2, orig))
+        outputs.append((h_out_1, h_out_2))
         return h_out_2
 
     def construct_net(self, planes):
         # Network structure
-        RESIDUAL_FILTERS = 128
-        RESIDUAL_BLOCKS = 6
+        RESIDUAL_FILTERS = self.channels
+        RESIDUAL_BLOCKS = self.blocks
 
         # NCHW format
         # batch, 18 channels, 19 x 19
         x_planes = tf.reshape(planes, [-1, 18, 19, 19])
+        x_planes_ = tf.transpose(x_planes, perm=[0,2,3,1]) # NHWC
 
         # Input convolution
-        flow = self.conv_block(x_planes, filter_size=3,
+        flow = self.conv_block(x_planes_, filter_size=3,
                                input_channels=18,
                                output_channels=RESIDUAL_FILTERS)
+        self.outputs['input_conv'] = flow
         # Residual tower
+        self.outputs['residual'] = []
         for _ in range(0, RESIDUAL_BLOCKS):
-            flow = self.residual_block(flow, RESIDUAL_FILTERS)
+            flow = self.residual_block(
+                flow, RESIDUAL_FILTERS, self.outputs['residual'])
 
         # Policy head
         conv_pol = self.conv_block(flow, filter_size=1,
                                    input_channels=RESIDUAL_FILTERS,
                                    output_channels=2)
-        h_conv_pol_flat = tf.reshape(conv_pol, [-1, 2*19*19])
+        self.outputs['conv_pol'] = conv_pol
+        conv_pol_ = tf.transpose(conv_pol, perm=[0,3,1,2]) # NCHW
+        self.conv_pol = conv_pol_
+        h_conv_pol_flat = tf.reshape(conv_pol_, [-1, 2*19*19])
         W_fc1 = weight_variable([2 * 19 * 19, (19 * 19) + 1])
         b_fc1 = bias_variable([(19 * 19) + 1])
         self.weights.append(W_fc1)
         self.weights.append(b_fc1)
         h_fc1 = tf.add(tf.matmul(h_conv_pol_flat, W_fc1), b_fc1)
+        self.outputs['fc1'] = h_fc1
 
         # Value head
         conv_val = self.conv_block(flow, filter_size=1,
                                    input_channels=RESIDUAL_FILTERS,
                                    output_channels=1)
-        h_conv_val_flat = tf.reshape(conv_val, [-1, 19*19])
+        self.outputs['conv_val'] = conv_val
+        conv_val_ = tf.transpose(conv_val, perm=[0,3,1,2]) #NCHW
+        self.conv_val = conv_val_
+        h_conv_val_flat = tf.reshape(conv_val_, [-1, 19*19])
         W_fc2 = weight_variable([19 * 19, 256])
         b_fc2 = bias_variable([256])
         self.weights.append(W_fc2)
         self.weights.append(b_fc2)
         h_fc2 = tf.nn.relu(tf.add(tf.matmul(h_conv_val_flat, W_fc2), b_fc2))
+        self.outputs['fc2'] = h_fc2
         W_fc3 = weight_variable([256, 1])
         b_fc3 = bias_variable([1])
         self.weights.append(W_fc3)
