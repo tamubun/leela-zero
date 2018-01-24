@@ -1,7 +1,28 @@
 [![Linux Build Status](https://travis-ci.org/gcp/leela-zero.svg?branch=next)](https://travis-ci.org/gcp/leela-zero)
 [![Windows Build Status](https://ci.appveyor.com/api/projects/status/pf1hcgly8f1a8iu0/branch/next?svg=true)](https://ci.appveyor.com/project/gcp/leela-zero/branch/next)
 
+# tamubun LZ fork to visualize network weights and outputs
 
+AlphaGo/ directory is from [RocAlphaGo](https://github.com/Rochester-NRT/RocAlphaGo/commit/315f89d8dbb40256462f3301a20cdf4dc7354ad2), with some modifications. This is used only for construct
+input plane from SGF file.
+
+# Usage (example)
+1. Move to training/tf directory.
+2. Copy LZ network weight file to this directory.
+3. Edit bun.py to change network weight file name.
+4. start python or ipython
+5. `
+    from bun import *
+    move = 20
+    x = get_input(move, fname='some_sgf_file.sgf')
+    show_array(x[1], scale=3) # show current position.
+    z = t.outputs['y_conv'][0].eval(feed_dict={t.x: x[0], t.training:False}, session=s) # calculate policy output
+    show_array(z[0:361].reshape(19,19), scale=3, figid=1)
+`
+
+
+Original README is following:
+-------
 
 # What
 
