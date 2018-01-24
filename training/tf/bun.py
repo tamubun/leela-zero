@@ -20,17 +20,16 @@ mycmap = colors.LinearSegmentedColormap.from_list(
 
 def show_array(a, fname=None, scale=1, figid=0, m = None):
     """
-    shape=(x,y)の 配列を表示。
-    fnameを指定した時は、画面表示せず、ファイルに落とす。
-    scaleで拡大率を変える。
-    figid を指定すると、同時に複数のウィンドウに表示できる。
-    m は、normalize用の最大値。
-    mを渡さなければ、全体の絶対値の最大値を使う。
+    Show array of shape=(x,y).
+    When fname is given, output figure is to file, without displaying.
+    When scale is given, enlargement scale is changed.
+    When figid is given, the output is shown that ids window.
+    m is normalize factor and if omitted, m is automatically set.
     """
     if m is None:
         m = np.abs(a).max()
     (x,y) = a.shape
-#    a = a.T # 転置しないと盤面と合わない
+
     if a.min() >= 0:
         cmap = 'gray'
         norm = colors.Normalize(0, m)
@@ -47,30 +46,15 @@ def show_array(a, fname=None, scale=1, figid=0, m = None):
     else:
         plt.savefig(fname)
 
-def pos(p):
-    if p is None:
-        return 'pass'
-    (x,y) = p
-    return 'abcdefghjklmnopqrst'[x] + str(19-y)
-
-def xy(s):
-    s = s.lower()
-    try:
-        if len(s) < 2 or len(s) > 3:
-            raise ValueError
-        x = 'abcdefghjklmnopqrst'.index(s[0])
-        y = 19 - int(s[1:])
-        if y < 0 or y > 18:
-            raise ValueError
-    except ValueError:
-        return None
-    return (x,y)
-
 def get_input(m, fname = '20160312-Lee-Sedol-vs-AlphaGo.sgf'):
     """
-    fnameで指定したSGFの m番目の盤面からLeelaの入力を作る。
-    m=0 が初期盤面。
-    retval[0] が leelaの入力planes, retval[1]は、現在の盤面。
+    Create LeelaZero inputs planes from SGF file.
+    m: move count. m = 0 means initial position.
+    fname: SGF file name.
+
+    returns tuple
+      tuple[0]: LZ input planes
+      tuple[1]: current position (for checking)
     """
     p = np.zeros((1,18,361), np.float32)
 
